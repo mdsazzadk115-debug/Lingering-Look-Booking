@@ -8,6 +8,7 @@ import { Users, LogOut, CalendarCheck, BarChart3, TrendingUp, Globe, Zap, Upload
 const AdminDashboard: React.FC = () => {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [visits, setVisits] = useState<Visit[]>([]);
+  // Initialize with safe defaults
   const [settings, setSettings] = useState<AdminSettings>({ googleAnalyticsId: '', facebookPixelId: '', automationRules: [] });
   const [activeTab, setActiveTab] = useState<'leads' | 'analytics' | 'tracking' | 'automation' | 'appointments' | 'finance' | 'incomplete'>('leads');
   const [newRule, setNewRule] = useState<Partial<AutomationRule>>({ type: 'SERVICE', intervalDays: 7, active: true });
@@ -43,14 +44,22 @@ const AdminDashboard: React.FC = () => {
               getVisits()
           ]);
 
-          setLeads(loadedLeads);
-          setSettings(loadedSettings);
-          setVisits(loadedVisits);
+          setLeads(Array.isArray(loadedLeads) ? loadedLeads : []);
+          setVisits(Array.isArray(loadedVisits) ? loadedVisits : []);
+          
+          // CRITICAL FIX: Ensure settings properties are never null/undefined to prevent crashes
+          setSettings({
+              googleAnalyticsId: loadedSettings?.googleAnalyticsId || '',
+              facebookPixelId: loadedSettings?.facebookPixelId || '',
+              automationRules: Array.isArray(loadedSettings?.automationRules) ? loadedSettings.automationRules : []
+          });
           
           const initialNotes: {[key: string]: string} = {};
-          loadedLeads.forEach(l => {
-              if (l.notes) initialNotes[l.id] = l.notes;
-          });
+          if (Array.isArray(loadedLeads)) {
+            loadedLeads.forEach(l => {
+                if (l.notes) initialNotes[l.id] = l.notes;
+            });
+          }
           setNotesInput(initialNotes);
       } catch (error) {
           console.error("Failed to load dashboard data", error);
@@ -163,8 +172,8 @@ const AdminDashboard: React.FC = () => {
 
       listToDownload.forEach(l => {
           const offer = OFFERS.find(o => o.id === l.offerId);
-          const name = l.name.replace(/"/g, '""');
-          const phone = l.phone.replace(/"/g, '""');
+          const name = (l.name || '').replace(/"/g, '""');
+          const phone = (l.phone || '').replace(/"/g, '""');
           const service = (offer?.buyItem || 'Unknown').replace(/"/g, '""');
           
           csvRows.push([
@@ -172,8 +181,8 @@ const AdminDashboard: React.FC = () => {
               `"${phone}"`, 
               `"${service}"`, 
               `"${offer?.buyPrice || '0'}"`,
-              l.status,
-              appointmentView === 'incoming' ? l.appointmentDate : (l.followUpDate || ''),
+              l.status || '',
+              appointmentView === 'incoming' ? (l.appointmentDate || '') : (l.followUpDate || ''),
               l.followUpStatus || 'Pending'
           ]);
       });
@@ -213,7 +222,7 @@ const AdminDashboard: React.FC = () => {
   };
 
   const handleDeleteRule = async (id: string) => {
-      const updatedRules = settings.automationRules.filter(r => r.id !== id);
+      const updatedRules = (settings.automationRules || []).filter(r => r.id !== id);
       const updatedSettings = { ...settings, automationRules: updatedRules };
       setSettings(updatedSettings);
       await saveSettings(updatedSettings);
@@ -266,14 +275,22 @@ const AdminDashboard: React.FC = () => {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const visitsToday = visits.filter(v => new Date(v.timestamp).toLocaleDateString() === today).length;
-    const visits30Days = visits.filter(v => new Date(v.timestamp) >= thirtyDaysAgo).length;
+    const safeVisits = Array.isArray(visits) ? visits : [];
+
+    const visitsToday = safeVisits.filter(v => {
+        try { return new Date(v.timestamp).toLocaleDateString() === today; } catch { return false; }
+    }).length;
+    
+    const visits30Days = safeVisits.filter(v => {
+        try { return new Date(v.timestamp) >= thirtyDaysAgo; } catch { return false; }
+    }).length;
     
     const sources: {[key: string]: number} = {};
     const locations: {[key: string]: number} = {};
 
-    visits.forEach(v => {
-      sources[v.source] = (sources[v.source] || 0) + 1;
+    safeVisits.forEach(v => {
+      const src = v.source || 'Unknown';
+      sources[src] = (sources[src] || 0) + 1;
       const loc = v.location || 'Unknown';
       locations[loc] = (locations[loc] || 0) + 1;
     });
@@ -281,7 +298,7 @@ const AdminDashboard: React.FC = () => {
     const sortedSources = Object.entries(sources).sort(([,a], [,b]) => b - a);
     const sortedLocations = Object.entries(locations).sort(([,a], [,b]) => b - a);
 
-    return { visitsToday, visits30Days, total: visits.length, sources: sortedSources, locations: sortedLocations };
+    return { visitsToday, visits30Days, total: safeVisits.length, sources: sortedSources, locations: sortedLocations };
   };
 
   const analytics = getAnalytics();
@@ -321,8 +338,10 @@ const AdminDashboard: React.FC = () => {
       const now = new Date();
       const currentMonthPrefix = now.toISOString().slice(0, 7); // YYYY-MM
       const today = now.toISOString().split('T')[0];
+      
+      const safeLeads = Array.isArray(leads) ? leads : [];
 
-      const relevantLeads = leads.filter(l => {
+      const relevantLeads = safeLeads.filter(l => {
           if (l.status === 'Abandoned') return false; 
           if (financialTimeframe === 'all_time') return true;
           // Safety check for appointmentDate
@@ -331,7 +350,7 @@ const AdminDashboard: React.FC = () => {
 
       const breakdown = OFFERS.map(offer => {
           const avgPrice = parsePrice(offer.buyPrice);
-          const serviceLeads = relevantLeads.filter(l => l.offerId === offer.id);
+          const serviceLeads = relevantLeads.filter(l => Number(l.offerId) === offer.id);
           
           const totalCount = serviceLeads.length;
           const completedCount = serviceLeads.filter(l => l.status === 'Completed').length;
@@ -387,9 +406,9 @@ const AdminDashboard: React.FC = () => {
   });
 
   const sortedAppointments = [...filteredLeadsForCalendar].sort((a,b) => {
-      if (activeTab === 'incomplete') return b.submittedAt.localeCompare(a.submittedAt);
-      if (appointmentView === 'incoming') return a.appointmentTime.localeCompare(b.appointmentTime);
-      return a.name.localeCompare(b.name);
+      if (activeTab === 'incomplete') return (b.submittedAt || '').localeCompare(a.submittedAt || '');
+      if (appointmentView === 'incoming') return (a.appointmentTime || '').localeCompare(b.appointmentTime || '');
+      return (a.name || '').localeCompare(b.name || '');
   });
 
   const changeMonth = (offset: number) => {
@@ -546,7 +565,7 @@ const AdminDashboard: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
-                                {financials.breakdown.map(item => (
+                                {(financials.breakdown || []).map(item => (
                                     <tr key={item.id} className="hover:bg-gray-50">
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="text-sm font-medium text-gray-900">{item.emoji} {item.buyItem}</div>
@@ -616,10 +635,10 @@ const AdminDashboard: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
-                                {analytics.sources.length === 0 ? (
+                                {(analytics.sources || []).length === 0 ? (
                                     <tr><td colSpan={2} className="px-6 py-4 text-center text-sm text-gray-500">No data available</td></tr>
                                 ) : (
-                                    analytics.sources.map(([source, count], idx) => (
+                                    (analytics.sources || []).map(([source, count], idx) => (
                                         <tr key={source}>
                                             <td className="px-6 py-4 text-sm text-gray-900 flex items-center">
                                                 <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs mr-2 font-bold">{idx + 1}</span>
@@ -645,10 +664,10 @@ const AdminDashboard: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
-                                {analytics.locations.length === 0 ? (
+                                {(analytics.locations || []).length === 0 ? (
                                     <tr><td colSpan={2} className="px-6 py-4 text-center text-sm text-gray-500">No data available</td></tr>
                                 ) : (
-                                    analytics.locations.map(([loc, count], idx) => (
+                                    (analytics.locations || []).map(([loc, count], idx) => (
                                         <tr key={loc}>
                                             <td className="px-6 py-4 text-sm text-gray-900">{loc}</td>
                                             <td className="px-6 py-4 text-sm text-gray-600 font-bold">{count}</td>
@@ -682,7 +701,7 @@ const AdminDashboard: React.FC = () => {
                                     type="text"
                                     className="focus:ring-pink-500 focus:border-pink-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-2 border"
                                     placeholder="G-XXXXXXXXXX"
-                                    value={settings.googleAnalyticsId}
+                                    value={settings.googleAnalyticsId || ''}
                                     onChange={(e) => setSettings({...settings, googleAnalyticsId: e.target.value})}
                                 />
                              </div>
@@ -699,7 +718,7 @@ const AdminDashboard: React.FC = () => {
                                     type="text"
                                     className="focus:ring-pink-500 focus:border-pink-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-2 border"
                                     placeholder="123456789012345"
-                                    value={settings.facebookPixelId}
+                                    value={settings.facebookPixelId || ''}
                                     onChange={(e) => setSettings({...settings, facebookPixelId: e.target.value})}
                                 />
                              </div>
@@ -789,15 +808,15 @@ const AdminDashboard: React.FC = () => {
 
                 <div className="bg-white shadow overflow-hidden rounded-md border border-gray-200">
                     <ul className="divide-y divide-gray-200">
-                        {settings.automationRules.length === 0 ? (
+                        {(settings.automationRules || []).length === 0 ? (
                             <li className="px-6 py-4 text-center text-gray-500">No automation rules configured.</li>
                         ) : (
-                            settings.automationRules.map(rule => (
+                            (settings.automationRules || []).map(rule => (
                                 <li key={rule.id} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50">
                                     <div>
                                         <h4 className="text-sm font-bold text-gray-900">{rule.name}</h4>
                                         <p className="text-sm text-gray-500">
-                                            {rule.type === 'SERVICE' ? `Target: ${rule.targetServiceId ? OFFERS.find(o => o.id === rule.targetServiceId)?.buyItem : 'Any Service'}` : 'Manual List'} 
+                                            {rule.type === 'SERVICE' ? `Target: ${rule.targetServiceId ? (OFFERS.find(o => o.id === Number(rule.targetServiceId))?.buyItem || 'Unknown') : 'Any Service'}` : 'Manual List'} 
                                             • {rule.intervalDays} days after visit
                                         </p>
                                         <p className="text-xs text-gray-400 mt-1 truncate max-w-md">"{rule.messageTemplate}"</p>
@@ -882,13 +901,13 @@ const AdminDashboard: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
-                                {leads.length === 0 ? (
+                                {(leads || []).length === 0 ? (
                                     <tr>
                                         <td colSpan={5} className="px-6 py-10 text-center text-gray-500">No leads found yet.</td>
                                     </tr>
                                 ) : (
                                     leads.map(lead => {
-                                        const offer = OFFERS.find(o => o.id === lead.offerId);
+                                        const offer = OFFERS.find(o => o.id === Number(lead.offerId));
                                         return (
                                             <tr key={lead.id} className="hover:bg-gray-50">
                                                 <td className="px-6 py-4 whitespace-nowrap">
@@ -1131,7 +1150,7 @@ const AdminDashboard: React.FC = () => {
                             </li>
                         ) : (
                             sortedAppointments.map(lead => {
-                                const offer = OFFERS.find(o => o.id === lead.offerId);
+                                const offer = OFFERS.find(o => o.id === Number(lead.offerId));
                                 const isSelected = selectedLeadIds.has(lead.id);
                                 return (
                                     <li key={lead.id} className={`p-6 hover:bg-gray-50 transition-colors ${isSelected ? (activeTab === 'incomplete' ? 'bg-red-50/50' : appointmentView === 'incoming' ? 'bg-pink-50/50' : 'bg-purple-50/50') : ''}`}>
@@ -1151,7 +1170,7 @@ const AdminDashboard: React.FC = () => {
                                                         <span className="inline-flex px-2 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800">
                                                             Abandoned
                                                         </span>
-                                                        <p className="text-xs text-gray-400 mt-1">Left at:<br/>{new Date(lead.submittedAt).toLocaleTimeString()}</p>
+                                                        <p className="text-xs text-gray-400 mt-1">Left at:<br/>{lead.submittedAt ? new Date(lead.submittedAt).toLocaleTimeString() : 'Unknown'}</p>
                                                     </>
                                                 ) : appointmentView === 'incoming' ? (
                                                     <>
