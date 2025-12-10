@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { getLeads, getSettings, saveSettings, getVisits, saveLead, updateLead } from '../services/storageService';
 import { Lead, AdminSettings, Visit, AutomationRule } from '../types';
 import { OFFERS, BRAND_COLOR } from '../constants';
-import { Users, LogOut, CalendarCheck, BarChart3, TrendingUp, Globe, Zap, Upload, Calendar, Bell, ChevronLeft, ChevronRight, CheckSquare, Square, Copy, CheckCircle, MessageSquare, PhoneOutgoing, Repeat, Download, Filter, DollarSign, AlertTriangle, Loader2 } from 'lucide-react';
+import { Users, LogOut, CalendarCheck, BarChart3, TrendingUp, Globe, Zap, Upload, Calendar, Bell, ChevronLeft, ChevronRight, CheckSquare, Square, Copy, CheckCircle, MessageSquare, PhoneOutgoing, Repeat, Download, Filter, DollarSign, AlertTriangle, Loader2, Save, Target } from 'lucide-react';
 
 const AdminDashboard: React.FC = () => {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -212,6 +212,13 @@ const AdminDashboard: React.FC = () => {
     setNewRule({ type: 'SERVICE', intervalDays: 7, active: true, name: '', messageTemplate: '' });
   };
 
+  const handleDeleteRule = async (id: string) => {
+      const updatedRules = settings.automationRules.filter(r => r.id !== id);
+      const updatedSettings = { ...settings, automationRules: updatedRules };
+      setSettings(updatedSettings);
+      await saveSettings(updatedSettings);
+  };
+
   const handleBulkImport = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!bulkImportServiceId || !bulkImportData) return;
@@ -293,6 +300,7 @@ const AdminDashboard: React.FC = () => {
   };
 
   const parsePrice = (priceStr: string): number => {
+      if (!priceStr) return 0;
       try {
           const clean = priceStr.replace(/,/g, '').replace(/[^\d-]/g, '');
           if (clean.includes('-')) {
@@ -317,6 +325,7 @@ const AdminDashboard: React.FC = () => {
       const relevantLeads = leads.filter(l => {
           if (l.status === 'Abandoned') return false; 
           if (financialTimeframe === 'all_time') return true;
+          // Safety check for appointmentDate
           return l.appointmentDate && l.appointmentDate.startsWith(currentMonthPrefix);
       });
 
@@ -326,8 +335,11 @@ const AdminDashboard: React.FC = () => {
           
           const totalCount = serviceLeads.length;
           const completedCount = serviceLeads.filter(l => l.status === 'Completed').length;
+          
+          // Safety check for appointmentDate comparison
           const lostCount = serviceLeads.filter(l => 
               l.status !== 'Completed' && 
+              l.appointmentDate && 
               l.appointmentDate < today && 
               l.appointmentDate !== 'N/A'
           ).length;
@@ -450,6 +462,20 @@ const AdminDashboard: React.FC = () => {
                 <BarChart3 className="w-5 h-5 mr-3" />
                 Visitor Analytics
             </button>
+            <button
+                onClick={() => setActiveTab('tracking')}
+                className={`w-full flex items-center px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === 'tracking' ? 'bg-pink-50 text-pink-700' : 'text-gray-600 hover:bg-gray-50'}`}
+            >
+                <Target className="w-5 h-5 mr-3" />
+                Tracking Setup
+            </button>
+            <button
+                onClick={() => setActiveTab('automation')}
+                className={`w-full flex items-center px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === 'automation' ? 'bg-pink-50 text-pink-700' : 'text-gray-600 hover:bg-gray-50'}`}
+            >
+                <Zap className="w-5 h-5 mr-3" />
+                Automation Rules
+            </button>
         </div>
         <div className="p-4 mt-auto border-t">
             <button
@@ -551,6 +577,241 @@ const AdminDashboard: React.FC = () => {
                             </tbody>
                         </table>
                     </div>
+                </div>
+            </div>
+        )}
+
+        {activeTab === 'analytics' && (
+             <div className="space-y-6">
+                 <div>
+                    <h2 className="text-2xl font-bold text-gray-800">Visitor Analytics</h2>
+                    <p className="text-gray-500">Track where your customers are coming from.</p>
+                 </div>
+                 
+                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="bg-white p-6 rounded-lg shadow-sm border">
+                        <p className="text-gray-500 text-sm font-medium">Visits Today</p>
+                        <p className="text-3xl font-bold text-gray-800 mt-2">{analytics.visitsToday}</p>
+                    </div>
+                    <div className="bg-white p-6 rounded-lg shadow-sm border">
+                        <p className="text-gray-500 text-sm font-medium">Last 30 Days</p>
+                        <p className="text-3xl font-bold text-gray-800 mt-2">{analytics.visits30Days}</p>
+                    </div>
+                    <div className="bg-white p-6 rounded-lg shadow-sm border">
+                        <p className="text-gray-500 text-sm font-medium">Total Tracked</p>
+                        <p className="text-3xl font-bold text-gray-800 mt-2">{analytics.total}</p>
+                    </div>
+                 </div>
+
+                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
+                        <div className="px-6 py-4 border-b bg-gray-50">
+                            <h3 className="font-bold text-gray-700">Top Traffic Sources</h3>
+                        </div>
+                        <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Visits</th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {analytics.sources.length === 0 ? (
+                                    <tr><td colSpan={2} className="px-6 py-4 text-center text-sm text-gray-500">No data available</td></tr>
+                                ) : (
+                                    analytics.sources.map(([source, count], idx) => (
+                                        <tr key={source}>
+                                            <td className="px-6 py-4 text-sm text-gray-900 flex items-center">
+                                                <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs mr-2 font-bold">{idx + 1}</span>
+                                                {source}
+                                            </td>
+                                            <td className="px-6 py-4 text-sm text-gray-600 font-bold">{count}</td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
+                         <div className="px-6 py-4 border-b bg-gray-50">
+                            <h3 className="font-bold text-gray-700">Top Locations</h3>
+                        </div>
+                         <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Location</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Visits</th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {analytics.locations.length === 0 ? (
+                                    <tr><td colSpan={2} className="px-6 py-4 text-center text-sm text-gray-500">No data available</td></tr>
+                                ) : (
+                                    analytics.locations.map(([loc, count], idx) => (
+                                        <tr key={loc}>
+                                            <td className="px-6 py-4 text-sm text-gray-900">{loc}</td>
+                                            <td className="px-6 py-4 text-sm text-gray-600 font-bold">{count}</td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                 </div>
+             </div>
+        )}
+
+        {activeTab === 'tracking' && (
+            <div className="space-y-6">
+                <div>
+                   <h2 className="text-2xl font-bold text-gray-800">Tracking Setup</h2>
+                   <p className="text-gray-500">Configure Google Analytics and Facebook Pixel.</p>
+                </div>
+                
+                <div className="bg-white rounded-lg shadow-sm border p-6">
+                     <h3 className="text-lg font-bold text-gray-800 mb-4 border-b pb-2">Tracking IDs</h3>
+                     <div className="space-y-4 max-w-lg">
+                         <div>
+                             <label className="block text-sm font-medium text-gray-700">Google Analytics ID (Measurement ID)</label>
+                             <div className="mt-1 relative rounded-md shadow-sm">
+                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <Globe className="h-5 w-5 text-gray-400" />
+                                </div>
+                                <input
+                                    type="text"
+                                    className="focus:ring-pink-500 focus:border-pink-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-2 border"
+                                    placeholder="G-XXXXXXXXXX"
+                                    value={settings.googleAnalyticsId}
+                                    onChange={(e) => setSettings({...settings, googleAnalyticsId: e.target.value})}
+                                />
+                             </div>
+                             <p className="text-xs text-gray-500 mt-1">Found in Google Analytics Admin &gt; Data Streams.</p>
+                         </div>
+                         
+                         <div>
+                             <label className="block text-sm font-medium text-gray-700">Facebook Pixel ID</label>
+                             <div className="mt-1 relative rounded-md shadow-sm">
+                                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                    <Target className="h-5 w-5 text-gray-400" />
+                                </div>
+                                <input
+                                    type="text"
+                                    className="focus:ring-pink-500 focus:border-pink-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md py-2 border"
+                                    placeholder="123456789012345"
+                                    value={settings.facebookPixelId}
+                                    onChange={(e) => setSettings({...settings, facebookPixelId: e.target.value})}
+                                />
+                             </div>
+                              <p className="text-xs text-gray-500 mt-1">Found in Facebook Events Manager.</p>
+                         </div>
+
+                         <div className="pt-4">
+                             <button
+                                onClick={handleSettingsSave}
+                                className="flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-pink-600 hover:bg-pink-700"
+                             >
+                                 <Save className="w-4 h-4 mr-2" />
+                                 Save Tracking Settings
+                             </button>
+                         </div>
+                     </div>
+                </div>
+            </div>
+        )}
+
+        {activeTab === 'automation' && (
+            <div className="space-y-6">
+                <div>
+                   <h2 className="text-2xl font-bold text-gray-800">Automation Rules</h2>
+                   <p className="text-gray-500">Plan your WhatsApp marketing campaigns.</p>
+                </div>
+
+                <div className="bg-white rounded-lg shadow-sm border p-6">
+                    <h3 className="text-lg font-bold text-gray-800 mb-4">Create New Campaign Rule</h3>
+                    <form onSubmit={handleAddRule} className="space-y-4">
+                        <div>
+                             <label className="block text-sm font-medium text-gray-700">Campaign Name</label>
+                             <input 
+                                type="text" 
+                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-pink-500 focus:border-pink-500 sm:text-sm"
+                                placeholder="e.g. 7-Day Followup"
+                                value={newRule.name || ''}
+                                onChange={(e) => setNewRule({...newRule, name: e.target.value})}
+                                required
+                             />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                             <div>
+                                <label className="block text-sm font-medium text-gray-700">Target Service</label>
+                                <select 
+                                    className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-pink-500 focus:border-pink-500 sm:text-sm rounded-md border"
+                                    value={newRule.targetServiceId || ''}
+                                    onChange={(e) => setNewRule({...newRule, targetServiceId: parseInt(e.target.value) || undefined})}
+                                >
+                                    <option value="">Any Service</option>
+                                    {OFFERS.map(o => (
+                                        <option key={o.id} value={o.id}>{o.emoji} {o.buyItem}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700">Send After (Days)</label>
+                                <input 
+                                    type="number" 
+                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-pink-500 focus:border-pink-500 sm:text-sm"
+                                    min="1"
+                                    value={newRule.intervalDays}
+                                    onChange={(e) => setNewRule({...newRule, intervalDays: parseInt(e.target.value)})}
+                                />
+                            </div>
+                        </div>
+                        <div>
+                             <label className="block text-sm font-medium text-gray-700">Message Template</label>
+                             <textarea 
+                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-pink-500 focus:border-pink-500 sm:text-sm"
+                                rows={3}
+                                placeholder="Hi {name}, it's been a while! Come back for 10% off."
+                                value={newRule.messageTemplate || ''}
+                                onChange={(e) => setNewRule({...newRule, messageTemplate: e.target.value})}
+                                required
+                             />
+                             <p className="text-xs text-gray-500 mt-1">Use <strong>{'{name}'}</strong> as a placeholder for customer name.</p>
+                        </div>
+                        <button
+                            type="submit"
+                            className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-gray-800 hover:bg-gray-900 focus:outline-none"
+                        >
+                            Add Rule
+                        </button>
+                    </form>
+                </div>
+
+                <div className="bg-white shadow overflow-hidden rounded-md border border-gray-200">
+                    <ul className="divide-y divide-gray-200">
+                        {settings.automationRules.length === 0 ? (
+                            <li className="px-6 py-4 text-center text-gray-500">No automation rules configured.</li>
+                        ) : (
+                            settings.automationRules.map(rule => (
+                                <li key={rule.id} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50">
+                                    <div>
+                                        <h4 className="text-sm font-bold text-gray-900">{rule.name}</h4>
+                                        <p className="text-sm text-gray-500">
+                                            {rule.type === 'SERVICE' ? `Target: ${rule.targetServiceId ? OFFERS.find(o => o.id === rule.targetServiceId)?.buyItem : 'Any Service'}` : 'Manual List'} 
+                                            • {rule.intervalDays} days after visit
+                                        </p>
+                                        <p className="text-xs text-gray-400 mt-1 truncate max-w-md">"{rule.messageTemplate}"</p>
+                                    </div>
+                                    <button 
+                                        onClick={() => handleDeleteRule(rule.id)}
+                                        className="text-red-600 hover:text-red-900 text-sm font-medium"
+                                    >
+                                        Delete
+                                    </button>
+                                </li>
+                            ))
+                        )}
+                    </ul>
                 </div>
             </div>
         )}
