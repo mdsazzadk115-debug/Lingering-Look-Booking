@@ -6,7 +6,7 @@ export interface Offer {
   buyPrice: string;
   freeItem: string;
   freePrice: string;
-  emoji: string; // New field for emojis
+  emoji: string;
   icon?: React.ReactNode;
 }
 
@@ -31,7 +31,6 @@ export interface Lead {
   followUpDate?: string; // The date you plan to call them back
   followUpStatus?: 'Pending' | 'Called' | 'Converted' | 'Missed';
   
-  nextFollowUp?: string; // Deprecated in favor of followUpDate, kept for compatibility if needed
   notes?: string; 
 }
 

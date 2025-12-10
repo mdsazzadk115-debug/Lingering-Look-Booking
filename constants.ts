@@ -30,7 +30,7 @@ export const OFFERS: Offer[] = [
     id: 2, 
     buyItem: "Luxury Facial", 
     buyPrice: "2,500",
-    freeItem: "Spa Pedi / Mani", 
+    freeItem: "SPA Pedi / Mani", 
     freePrice: "1,500",
     emoji: "✨"
   },
@@ -46,7 +46,7 @@ export const OFFERS: Offer[] = [
     id: 4, 
     buyItem: "Deluxe Pedi + Mani", 
     buyPrice: "3,600",
-    freeItem: "Ginga-Rita Hair Treat", 
+    freeItem: "Ginga-rita Hair Treat", 
     freePrice: "1,500 - 1,900",
     emoji: "🦶"
   },

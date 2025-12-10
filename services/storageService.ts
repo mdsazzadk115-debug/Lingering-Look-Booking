@@ -1,7 +1,7 @@
 import { Lead, AdminSettings, Visit } from "../types";
 
-// NOTE: In production (shared hosting), this should point to your PHP file location.
-// If the PHP file is in the root of public_html, it's just '/api.php'.
+// For local development with Vite proxy, use '/api.php'
+// For production, this must match where you upload the file.
 const API_URL = '/api.php'; 
 
 export const getLeads = async (): Promise<Lead[]> => {
@@ -73,12 +73,9 @@ export const saveSettings = async (settings: AdminSettings): Promise<void> => {
 export const trackVisit = async (sourceParam: string | null, locationData: string = 'Unknown'): Promise<void> => {
   let finalSource = 'Direct / Unknown';
 
-  // 1. Priority: URL Parameter
   if (sourceParam) {
     finalSource = sourceParam;
-  } 
-  // 2. Secondary: Document Referrer (Automatic)
-  else if (document.referrer) {
+  } else if (document.referrer) {
     const referrer = document.referrer.toLowerCase();
     if (referrer.includes('facebook.com') || referrer.includes('fb.com')) {
       finalSource = 'Facebook (Organic)';

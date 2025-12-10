@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { getLeads, getSettings, saveSettings, getVisits, saveLead, updateLead } from '../services/storageService';
 import { Lead, AdminSettings, Visit, AutomationRule } from '../types';
 import { OFFERS, BRAND_COLOR } from '../constants';
-import { Users, LogOut, CalendarCheck, BarChart3, TrendingUp, Globe, Facebook, Zap, Plus, Trash2, Upload, MapPin, Calendar, Bell, Save, StickyNote, ChevronLeft, ChevronRight, CheckSquare, Square, Copy, CheckCircle, MessageSquare, PhoneOutgoing, Clock, Repeat, Download, Filter, DollarSign, TrendingDown, PieChart, CalendarDays, Archive, AlertTriangle, Loader2 } from 'lucide-react';
+import { Users, LogOut, CalendarCheck, BarChart3, TrendingUp, Globe, Zap, Upload, Calendar, Bell, ChevronLeft, ChevronRight, CheckSquare, Square, Copy, CheckCircle, MessageSquare, PhoneOutgoing, Repeat, Download, Filter, DollarSign, AlertTriangle, Loader2 } from 'lucide-react';
 
 const AdminDashboard: React.FC = () => {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -47,7 +47,6 @@ const AdminDashboard: React.FC = () => {
           setSettings(loadedSettings);
           setVisits(loadedVisits);
           
-          // Initialize notes input state
           const initialNotes: {[key: string]: string} = {};
           loadedLeads.forEach(l => {
               if (l.notes) initialNotes[l.id] = l.notes;
@@ -80,7 +79,6 @@ const AdminDashboard: React.FC = () => {
     alert('Settings saved successfully!');
   };
 
-  // --- Leads Logic ---
   const handleNoteSave = async (lead: Lead) => {
       const newNote = notesInput[lead.id];
       const updatedLead = { ...lead, notes: newNote };
@@ -99,7 +97,7 @@ const AdminDashboard: React.FC = () => {
       
       const updatedLead: Lead = {
           ...lead,
-          status: 'Completed', // Ensure it's marked completed if we are setting follow up
+          status: 'Completed',
           followUpDate: tempFollowUpDate,
           followUpStatus: 'Pending'
       };
@@ -119,7 +117,6 @@ const AdminDashboard: React.FC = () => {
       refreshData();
   };
 
-  // --- Bulk Selection Logic ---
   const toggleSelectAll = (dateLeads: Lead[]) => {
       if (selectedLeadIds.size === dateLeads.length && dateLeads.length > 0) {
           setSelectedLeadIds(new Set());
@@ -166,7 +163,6 @@ const AdminDashboard: React.FC = () => {
 
       listToDownload.forEach(l => {
           const offer = OFFERS.find(o => o.id === l.offerId);
-          // Escape quotes in strings
           const name = l.name.replace(/"/g, '""');
           const phone = l.phone.replace(/"/g, '""');
           const service = (offer?.buyItem || 'Unknown').replace(/"/g, '""');
@@ -194,22 +190,6 @@ const AdminDashboard: React.FC = () => {
       document.body.removeChild(link);
   };
 
-  const handleBulkStatusChange = async (status: 'Contacted' | 'Completed') => {
-      if (!window.confirm(`Mark ${selectedLeadIds.size} clients as ${status}?`)) return;
-      
-      const promises: Promise<void>[] = [];
-      leads.forEach(l => {
-          if (selectedLeadIds.has(l.id)) {
-             promises.push(updateLead({ ...l, status }));
-          }
-      });
-      await Promise.all(promises);
-      refreshData();
-      setSelectedLeadIds(new Set());
-  };
-
-
-  // --- Automation Handlers ---
   const handleAddRule = async (e: React.FormEvent) => {
     e.preventDefault();
     if(!newRule.name || !newRule.messageTemplate) return;
@@ -232,14 +212,6 @@ const AdminDashboard: React.FC = () => {
     setNewRule({ type: 'SERVICE', intervalDays: 7, active: true, name: '', messageTemplate: '' });
   };
 
-  const handleDeleteRule = async (id: string) => {
-    const updatedRules = settings.automationRules.filter(r => r.id !== id);
-    const updatedSettings = { ...settings, automationRules: updatedRules };
-    setSettings(updatedSettings);
-    await saveSettings(updatedSettings);
-  };
-
-  // --- Bulk Import Handler ---
   const handleBulkImport = async (e: React.FormEvent) => {
       e.preventDefault();
       if (!bulkImportServiceId || !bulkImportData) return;
@@ -247,7 +219,6 @@ const AdminDashboard: React.FC = () => {
       const lines = bulkImportData.split('\n');
       let addedCount = 0;
       
-      // We'll execute these sequentially or in small batches to not overwhelm the PHP script
       for (const line of lines) {
           const parts = line.split(',');
           let name = 'Imported Customer';
@@ -283,7 +254,6 @@ const AdminDashboard: React.FC = () => {
       refreshData();
   };
 
-  // --- Analytics Helper ---
   const getAnalytics = () => {
     const today = new Date().toLocaleDateString();
     const thirtyDaysAgo = new Date();
@@ -308,28 +278,21 @@ const AdminDashboard: React.FC = () => {
   };
 
   const analytics = getAnalytics();
-
-  // Helper to count users in a service (All time total)
   const getServiceTotalCount = (offerId: number) => leads.filter(l => l.offerId === offerId).length;
 
-  // Helper to count users based on current view (active/retention)
   const getServiceActiveCount = (offerId: number) => {
       return leads.filter(l => {
           if (l.offerId !== offerId) return false;
           if (activeTab === 'incomplete') return l.status === 'Abandoned';
           if (appointmentView === 'incoming') {
-              // Incoming: All that are NOT completed yet AND NOT Abandoned
               return l.status !== 'Completed' && l.status !== 'Abandoned';
           } else {
-              // Retention: All that ARE completed
               return l.status === 'Completed';
           }
       }).length;
   };
 
-  // --- Financial Calculations ---
   const parsePrice = (priceStr: string): number => {
-      // Convert "3,200 - 4,000" to average (3600)
       try {
           const clean = priceStr.replace(/,/g, '').replace(/[^\d-]/g, '');
           if (clean.includes('-')) {
@@ -351,11 +314,9 @@ const AdminDashboard: React.FC = () => {
       const currentMonthPrefix = now.toISOString().slice(0, 7); // YYYY-MM
       const today = now.toISOString().split('T')[0];
 
-      // Filter leads based on selected timeframe
       const relevantLeads = leads.filter(l => {
           if (l.status === 'Abandoned') return false; 
           if (financialTimeframe === 'all_time') return true;
-          // For 'this_month', check if appointment date starts with YYYY-MM
           return l.appointmentDate && l.appointmentDate.startsWith(currentMonthPrefix);
       });
 
@@ -364,10 +325,7 @@ const AdminDashboard: React.FC = () => {
           const serviceLeads = relevantLeads.filter(l => l.offerId === offer.id);
           
           const totalCount = serviceLeads.length;
-          // Completed = Actual Revenue
           const completedCount = serviceLeads.filter(l => l.status === 'Completed').length;
-          
-          // Loss = Not completed AND date is in the past
           const lostCount = serviceLeads.filter(l => 
               l.status !== 'Completed' && 
               l.appointmentDate < today && 
@@ -378,7 +336,6 @@ const AdminDashboard: React.FC = () => {
           const actualRevenue = completedCount * avgPrice;
           const lostRevenue = lostCount * avgPrice;
           
-          // Pending is what remains
           const pendingCount = totalCount - completedCount - lostCount;
 
           totalPotential += potentialRevenue;
@@ -402,27 +359,18 @@ const AdminDashboard: React.FC = () => {
   };
 
   const financials = getFinancials();
-
-  // Calendar Helpers
   const getDaysInMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
   const getFirstDayOfMonth = (date: Date) => new Date(date.getFullYear(), date.getMonth(), 1).getDay();
 
-  // Determine which leads to show based on View Mode
   const filteredLeadsForCalendar = leads.filter(l => {
-      // 1. Incomplete / Abandoned Mode
       if (activeTab === 'incomplete') {
           return l.status === 'Abandoned' && l.appointmentDate === selectedDate;
       }
-
-      // 2. Normal Modes
       if (l.status === 'Abandoned') return false; 
-
       const dateMatch = appointmentView === 'incoming' 
         ? l.appointmentDate === selectedDate
         : l.followUpDate === selectedDate;
-
       const serviceMatch = filterServiceId === '' || l.offerId.toString() === filterServiceId;
-
       return dateMatch && serviceMatch;
   });
 
@@ -462,7 +410,6 @@ const AdminDashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col md:flex-row font-[Hind Siliguri]">
-      {/* Sidebar */}
       <aside className="bg-white w-full md:w-64 flex-shrink-0 border-r border-gray-200">
         <div className="h-16 flex items-center justify-center border-b border-gray-200 px-4">
              <span className="text-xl font-bold" style={{ color: BRAND_COLOR }}>Lingering Admin</span>
@@ -503,20 +450,6 @@ const AdminDashboard: React.FC = () => {
                 <BarChart3 className="w-5 h-5 mr-3" />
                 Visitor Analytics
             </button>
-            <button
-                onClick={() => setActiveTab('tracking')}
-                className={`w-full flex items-center px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === 'tracking' ? 'bg-pink-50 text-pink-700' : 'text-gray-600 hover:bg-gray-50'}`}
-            >
-                <Globe className="w-5 h-5 mr-3" />
-                Tracking Setup
-            </button>
-            <button
-                onClick={() => setActiveTab('automation')}
-                className={`w-full flex items-center px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === 'automation' ? 'bg-pink-50 text-pink-700' : 'text-gray-600 hover:bg-gray-50'}`}
-            >
-                <Zap className="w-5 h-5 mr-3" />
-                Automation Rules
-            </button>
         </div>
         <div className="p-4 mt-auto border-t">
             <button
@@ -529,18 +462,105 @@ const AdminDashboard: React.FC = () => {
         </div>
       </aside>
 
-      {/* Main Content */}
       <main className="flex-1 p-6 overflow-y-auto">
-        
-        {/* Leads Tab */}
+        {activeTab === 'finance' && (
+            <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                    <div>
+                        <h2 className="text-2xl font-bold text-gray-800">Financial Overview</h2>
+                        <p className="text-gray-500">Track earnings, losses, and conversion rates.</p>
+                    </div>
+                    <div className="flex bg-white rounded-lg shadow-sm border p-1">
+                        <button
+                            onClick={() => setFinancialTimeframe('this_month')}
+                            className={`px-4 py-2 rounded text-sm font-medium transition-all ${financialTimeframe === 'this_month' ? 'bg-pink-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+                        >
+                            This Month
+                        </button>
+                        <button
+                             onClick={() => setFinancialTimeframe('all_time')}
+                            className={`px-4 py-2 rounded text-sm font-medium transition-all ${financialTimeframe === 'all_time' ? 'bg-pink-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+                        >
+                            All Time
+                        </button>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="bg-white p-6 rounded-xl shadow border border-blue-100">
+                        <p className="text-sm font-bold text-blue-500 uppercase tracking-wide">Projected Income</p>
+                        <h3 className="text-3xl font-bold text-gray-900 mt-2">{financialTimeframe === 'this_month' ? '📅' : '💰'} {financials.totalPotential.toLocaleString()} BDT</h3>
+                        <p className="text-xs text-gray-400 mt-1">Total value of all bookings</p>
+                    </div>
+                    <div className="bg-white p-6 rounded-xl shadow border border-green-100">
+                        <p className="text-sm font-bold text-green-500 uppercase tracking-wide">Actual Income</p>
+                        <h3 className="text-3xl font-bold text-green-600 mt-2">✅ {financials.totalActual.toLocaleString()} BDT</h3>
+                        <p className="text-xs text-gray-400 mt-1">Value of 'Completed' appointments</p>
+                    </div>
+                    <div className="bg-white p-6 rounded-xl shadow border border-red-100">
+                        <p className="text-sm font-bold text-red-500 uppercase tracking-wide">Lost Income</p>
+                        <h3 className="text-3xl font-bold text-red-600 mt-2">📉 {financials.totalLoss.toLocaleString()} BDT</h3>
+                        <p className="text-xs text-gray-400 mt-1">Missed/No-show appointments</p>
+                    </div>
+                </div>
+
+                <div className="bg-white rounded-xl shadow border border-gray-200 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                        <h3 className="font-bold text-gray-800">Service Breakdown</h3>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Service</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bookings</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Conversion</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Revenue</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Loss</th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {financials.breakdown.map(item => (
+                                    <tr key={item.id} className="hover:bg-gray-50">
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="text-sm font-medium text-gray-900">{item.emoji} {item.buyItem}</div>
+                                            <div className="text-xs text-gray-500">Avg: {item.avgPrice.toLocaleString()} TK</div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="text-sm text-gray-900">{item.totalCount}</div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="w-full bg-gray-200 rounded-full h-2.5 max-w-[100px]">
+                                                <div 
+                                                    className="bg-green-600 h-2.5 rounded-full" 
+                                                    style={{ width: `${item.totalCount > 0 ? (item.completedCount / item.totalCount) * 100 : 0}%` }}
+                                                ></div>
+                                            </div>
+                                            <span className="text-xs text-gray-500 mt-1 inline-block">
+                                                {item.completedCount} / {item.totalCount}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">
+                                            {item.actualRevenue.toLocaleString()}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-red-600">
+                                            {item.lostRevenue.toLocaleString()}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        )}
+
         {activeTab === 'leads' && (
             <div className="space-y-8">
                 <div>
                    <h2 className="text-2xl font-bold text-gray-800">All Clients</h2>
                    <p className="text-gray-500">Master list of everyone who has ever booked or been imported.</p>
                 </div>
-
-                {/* Bulk Import Section */}
                 <div className="bg-white rounded-lg shadow p-6 border border-gray-200">
                     <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
                         <Upload className="w-5 h-5 mr-2" />
@@ -585,8 +605,6 @@ const AdminDashboard: React.FC = () => {
                         </button>
                     </form>
                 </div>
-
-                {/* Data Table */}
                 <div className="bg-white shadow rounded-lg overflow-hidden">
                     <div className="px-6 py-4 border-b border-gray-200">
                         <h3 className="text-lg font-bold text-gray-800">Recent Leads ({leads.length})</h3>
@@ -656,7 +674,6 @@ const AdminDashboard: React.FC = () => {
             </div>
         )}
 
-        {/* Appointments Tab OR Incomplete Bookings Tab (Shared UI Layout) */}
         {(activeTab === 'appointments' || activeTab === 'incomplete') && (
              <div className="space-y-6">
                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -676,8 +693,6 @@ const AdminDashboard: React.FC = () => {
                                     : 'Call previous clients to offer deals and bring them back.'}
                         </p>
                     </div>
-
-                    {/* View Switcher (Only if in Appointments Tab) */}
                     {activeTab === 'appointments' && (
                         <div className="bg-gray-200 p-1 rounded-lg flex space-x-1">
                             <button
@@ -706,12 +721,10 @@ const AdminDashboard: React.FC = () => {
                     )}
                  </div>
 
-                 {/* Calendar Grid */}
                  <div className={`bg-white rounded-xl shadow-lg border overflow-hidden ${
                      activeTab === 'incomplete' ? 'border-red-200' :
                      appointmentView === 'retention' ? 'border-purple-200' : 'border-gray-200'
                  }`}>
-                     {/* Calendar Header */}
                      <div className={`px-6 py-4 border-b flex items-center justify-between ${
                          activeTab === 'incomplete' ? 'bg-red-50 border-red-200' :
                          appointmentView === 'retention' ? 'bg-purple-50 border-purple-200' : 'bg-gray-50 border-gray-200'
@@ -728,7 +741,6 @@ const AdminDashboard: React.FC = () => {
                          </div>
                      </div>
                      
-                     {/* Calendar Days */}
                      <div className="p-4">
                          <div className="grid grid-cols-7 text-center text-xs font-semibold text-gray-500 mb-2">
                              <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
@@ -740,10 +752,8 @@ const AdminDashboard: React.FC = () => {
                              {Array.from({ length: getDaysInMonth(currentCalendarMonth) }).map((_, i) => {
                                  const day = i + 1;
                                  const dateStr = `${currentCalendarMonth.getFullYear()}-${String(currentCalendarMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                                 
                                  const count = getCalendarCount(dateStr);
                                  const isSelected = selectedDate === dateStr;
-                                 
                                  const activeColor = activeTab === 'incomplete' ? 'red' : appointmentView === 'incoming' ? 'pink' : 'purple';
                                  
                                  return (
@@ -772,7 +782,6 @@ const AdminDashboard: React.FC = () => {
                      </div>
                  </div>
 
-                 {/* Panel List View */}
                  <div className="bg-white shadow rounded-lg overflow-hidden border border-gray-200">
                     <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex flex-col xl:flex-row justify-between xl:items-center gap-4">
                         <div className="flex flex-col md:flex-row md:items-center gap-4 w-full">
@@ -785,8 +794,6 @@ const AdminDashboard: React.FC = () => {
                                     {sortedAppointments.length} {activeTab === 'incomplete' ? 'incomplete entries' : appointmentView === 'incoming' ? 'clients scheduled' : 'clients to contact'}
                                 </p>
                             </div>
-
-                            {/* Service Filter */}
                             <div className="relative md:ml-auto w-full md:w-auto">
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                     <Filter className="h-4 w-4 text-gray-400" />
@@ -807,7 +814,6 @@ const AdminDashboard: React.FC = () => {
                         </div>
                     </div>
                     
-                    {/* Bulk Action Toolbar */}
                     {sortedAppointments.length > 0 && (
                          <div className="px-6 py-2 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center gap-2">
                              <div className="flex items-center border-r pr-3 mr-1">
@@ -869,7 +875,6 @@ const AdminDashboard: React.FC = () => {
                                 return (
                                     <li key={lead.id} className={`p-6 hover:bg-gray-50 transition-colors ${isSelected ? (activeTab === 'incomplete' ? 'bg-red-50/50' : appointmentView === 'incoming' ? 'bg-pink-50/50' : 'bg-purple-50/50') : ''}`}>
                                         <div className="flex flex-col md:flex-row gap-4 items-start">
-                                            {/* Selection Checkbox */}
                                             <div className="pt-2">
                                                 <button onClick={() => toggleSelectOne(lead.id)}>
                                                     {isSelected ? (
@@ -879,8 +884,6 @@ const AdminDashboard: React.FC = () => {
                                                     )}
                                                 </button>
                                             </div>
-
-                                            {/* Time/Status Column */}
                                             <div className="flex-shrink-0 w-32 md:border-r border-gray-100 pr-4">
                                                 {activeTab === 'incomplete' ? (
                                                     <>
@@ -908,8 +911,6 @@ const AdminDashboard: React.FC = () => {
                                                     </>
                                                 )}
                                             </div>
-
-                                            {/* Client Info */}
                                             <div className="flex-1">
                                                 <div className="flex items-center gap-2">
                                                     <h4 className="text-lg font-bold text-gray-900">{lead.name || 'Unknown User'}</h4>
@@ -925,11 +926,8 @@ const AdminDashboard: React.FC = () => {
                                                     <span>{offer?.emoji} {offer?.buyItem}</span>
                                                 </div>
                                             </div>
-
-                                            {/* Actions */}
                                             <div className="flex-1 min-w-[250px] w-full border-l border-gray-100 pl-4 md:pl-6">
                                                 {activeTab === 'incomplete' ? (
-                                                    // INCOMPLETE ACTIONS
                                                     <div className="space-y-3">
                                                          <button 
                                                             onClick={() => window.open(`tel:${lead.phone}`)}
@@ -947,7 +945,6 @@ const AdminDashboard: React.FC = () => {
                                                         </button>
                                                     </div>
                                                 ) : appointmentView === 'incoming' ? (
-                                                    // INCOMING ACTIONS
                                                     <div className="space-y-3">
                                                         {editingFollowUpId === lead.id ? (
                                                             <div className="bg-purple-50 p-2 rounded border border-purple-200 animate-fade-in">
@@ -997,7 +994,6 @@ const AdminDashboard: React.FC = () => {
                                                                 <button
                                                                     onClick={() => {
                                                                         setEditingFollowUpId(lead.id);
-                                                                        // Default to 30 days later
                                                                         const d = new Date();
                                                                         d.setDate(d.getDate() + 30);
                                                                         setTempFollowUpDate(d.toISOString().split('T')[0]);
@@ -1011,7 +1007,6 @@ const AdminDashboard: React.FC = () => {
                                                         )}
                                                     </div>
                                                 ) : (
-                                                    // RETENTION ACTIONS
                                                     <div className="space-y-3">
                                                         <div className="flex gap-2">
                                                             <button 
@@ -1062,7 +1057,6 @@ const AdminDashboard: React.FC = () => {
                  </div>
              </div>
         )}
-        {/* Rest of the component (Finance, Analytics, Tracking, Automation) remains same as previous version but using the loaded states */}
       </main>
     </div>
   );
